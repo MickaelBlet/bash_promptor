@@ -539,6 +539,8 @@ promptor::segment_newline() {
 # Async git status file
 PROMPTOR_GIT_ASYNC_FILE="${PROMPTOR_CACHE_DIR}/git_status_$$"
 PROMPTOR_GIT_ASYNC_PID=""
+PROMPTOR_GIT_ASYNC_PENDING=""
+PROMPTOR_PARENT_PID=$$
 
 # Get git status (sync or from async cache)
 promptor::git_get_status() {
@@ -631,16 +633,35 @@ promptor::git_status_sync() {
 promptor::git_async_start() {
     [[ "${PROMPTOR_ASYNC_ENABLED:-1}" != "1" ]] && return
 
+    # Check if we're in a git repo first
+    if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+        rm -f "$PROMPTOR_GIT_ASYNC_FILE" 2>/dev/null
+        return
+    fi
+
     # Kill previous worker if running
     if [[ -n "$PROMPTOR_GIT_ASYNC_PID" ]] && kill -0 "$PROMPTOR_GIT_ASYNC_PID" 2>/dev/null; then
         kill "$PROMPTOR_GIT_ASYNC_PID" 2>/dev/null
     fi
 
-    # Start new worker
+    # Store current git info hash to detect changes
+    local old_info=""
+    [[ -f "$PROMPTOR_GIT_ASYNC_FILE" ]] && old_info=$(cat "$PROMPTOR_GIT_ASYNC_FILE" 2>/dev/null)
+
+    # Mark as pending update
+    PROMPTOR_GIT_ASYNC_PENDING=1
+
+    # Start new worker that signals parent when done
     (
         local result
         result=$(promptor::git_status_sync 2>/dev/null)
         echo "$result" > "$PROMPTOR_GIT_ASYNC_FILE" 2>/dev/null
+
+        # Only signal if the result changed
+        if [[ "$result" != "$old_info" ]]; then
+            # Signal parent to redraw prompt
+            kill -USR1 "$PROMPTOR_PARENT_PID" 2>/dev/null
+        fi
     ) &
     PROMPTOR_GIT_ASYNC_PID=$!
     disown "$PROMPTOR_GIT_ASYNC_PID" 2>/dev/null
@@ -649,6 +670,111 @@ promptor::git_async_start() {
 # Cleanup async files
 promptor::git_async_cleanup() {
     rm -f "${PROMPTOR_CACHE_DIR}/git_status_"* 2>/dev/null
+}
+
+# =============================================================================
+# ASYNC PROMPT REDRAW
+# =============================================================================
+
+# Expand PS1 prompt string (compatible with bash 4.0+)
+promptor::expand_prompt() {
+    local prompt="$1"
+    # Use bash's internal prompt expansion if available (4.4+)
+    if [[ "${BASH_VERSINFO[0]}" -ge 5 ]] || \
+       [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 4 ]]; then
+        printf '%s' "${prompt@P}"
+    else
+        # Fallback: basic expansion for older bash
+        # This handles common escape sequences
+        local expanded="$prompt"
+        expanded="${expanded//\\u/$USER}"
+        expanded="${expanded//\\h/${HOSTNAME%%.*}}"
+        expanded="${expanded//\\H/$HOSTNAME}"
+        expanded="${expanded//\\w/$PWD}"
+        expanded="${expanded//\\W/${PWD##*/}}"
+        expanded="${expanded//\\t/$(date +%H:%M:%S)}"
+        expanded="${expanded//\\d/$(date '+%a %b %d')}"
+        expanded="${expanded//\\$/\$}"
+        # Remove \[ and \] markers used for non-printing characters
+        expanded="${expanded//\\[/}"
+        expanded="${expanded//\\]/}"
+        printf '%s' "$expanded"
+    fi
+}
+
+# Redraw the prompt (called when async git completes)
+promptor::redraw_prompt() {
+    # Only redraw if we have a pending async update
+    [[ "${PROMPTOR_GIT_ASYNC_PENDING:-}" != "1" ]] && return
+    PROMPTOR_GIT_ASYNC_PENDING=""
+
+    # Build new prompt
+    local new_prompt
+    new_prompt=$(promptor::build_prompt)
+
+    # Check if git info actually changed
+    local old_ps1="$PS1"
+    PS1="$new_prompt"
+    [[ "$old_ps1" == "$PS1" ]] && return
+
+    # Redraw the current line
+    # Method: Clear line, reprint prompt, restore user input
+    local saved_line="${READLINE_LINE:-}"
+    local saved_point="${READLINE_POINT:-0}"
+
+    # Move to column 0, clear to end of screen (handles multiline prompts)
+    printf '\r'
+
+    # Calculate lines to clear (for multiline prompts)
+    local prompt_lines
+    prompt_lines=$(promptor::expand_prompt "$old_ps1" | grep -c $'\n' || echo 0)
+    prompt_lines=$((prompt_lines + 1))
+
+    # Move up and clear each line if multiline
+    if [[ $prompt_lines -gt 1 ]]; then
+        for ((i=1; i<prompt_lines; i++)); do
+            printf '\033[A'  # Move up
+        done
+    fi
+
+    # Clear from cursor to end of screen
+    printf '\033[J'
+
+    # Print expanded new prompt
+    promptor::expand_prompt "$PS1"
+
+    # Restore user's input
+    printf '%s' "$saved_line"
+
+    # Move cursor back to saved position if needed
+    local line_len=${#saved_line}
+    if [[ $saved_point -lt $line_len ]]; then
+        local move_back=$((line_len - saved_point))
+        printf '\033[%dD' "$move_back"
+    fi
+}
+
+# Signal handler for SIGUSR1 (async completion)
+promptor::handle_async_signal() {
+    # Check if we're at a prompt (not running a command)
+    # READLINE_LINE is only set when readline is active
+    if [[ -n "${READLINE_LINE+x}" ]] || [[ -z "${PROMPTOR_COMMAND_RUNNING:-}" ]]; then
+        promptor::redraw_prompt
+    fi
+}
+
+# Mark when a command starts/ends (for signal safety)
+promptor::preexec() {
+    # Only mark as running if this isn't part of PROMPT_COMMAND
+    # BASH_COMMAND contains the command being executed
+    case "${BASH_COMMAND:-}" in
+        *promptor::prompt_command*|*promptor::*) return ;;
+    esac
+    PROMPTOR_COMMAND_RUNNING=1
+}
+
+promptor::precmd() {
+    unset PROMPTOR_COMMAND_RUNNING
 }
 
 # =============================================================================
@@ -699,6 +825,9 @@ promptor::build_rprompt() {
 promptor::prompt_command() {
     # Capture exit status FIRST
     PROMPTOR_LAST_EXIT_STATUS=$?
+
+    # Mark that we're at a prompt (not running a command)
+    promptor::precmd
 
     # Start async git worker for next prompt
     promptor::git_async_start
@@ -1014,8 +1143,19 @@ promptor::init() {
         PROMPT_COMMAND="promptor::prompt_command; ${PROMPT_COMMAND}"
     fi
 
+    # Set up async signal handler for prompt redraw
+    # SIGUSR1 is sent by async worker when git status completes
+    trap 'promptor::handle_async_signal' USR1
+
+    # Set up DEBUG trap for preexec (marks when command starts)
+    # This helps avoid redrawing prompt while a command is running
+    if [[ -z "${PROMPTOR_DEBUG_TRAP_SET:-}" ]]; then
+        PROMPTOR_DEBUG_TRAP_SET=1
+        trap 'promptor::preexec' DEBUG
+    fi
+
     # Trap cleanup on exit
-    trap promptor::git_async_cleanup EXIT
+    trap 'promptor::git_async_cleanup' EXIT
 
     echo "Promptor loaded! Run 'promptor::customize' for live customization."
 }

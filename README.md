@@ -171,6 +171,16 @@ PROMPTOR_GIT_SHOW_UPSTREAM=1
 PROMPTOR_GIT_SHOW_COUNTS=1
 ```
 
+### Async Prompt Redraw
+
+When async mode is enabled, the prompt automatically redraws when git status updates complete. This means:
+- Initial prompt appears instantly (may show cached git info)
+- Git status is calculated in the background
+- Prompt redraws automatically when new git info is available
+- No blocking or lag while typing commands
+
+The redraw uses SIGUSR1 signals and readline integration for seamless updates.
+
 ### Colors
 
 Colors are specified as `"background foreground"` pairs using 256-color codes or names:
