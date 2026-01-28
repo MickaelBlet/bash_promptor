@@ -1,0 +1,170 @@
+# =============================================================================
+# Promptor Configuration File
+# =============================================================================
+# Copy this file to ~/.config/promptor/promptor.conf and customize
+# Or run promptor::customize for an interactive menu
+# =============================================================================
+
+# =============================================================================
+# LAYOUT
+# =============================================================================
+# Space-separated list of segments to display
+# Available segments:
+#   user        - Username with icon (root indicator)
+#   host        - Hostname (highlighted for SSH connections)
+#   path        - Current working directory
+#   git_status  - Git branch, status, and indicators
+#   virtualenv  - Python virtual environment name
+#   node_env    - Node.js environment
+#   jobs        - Background jobs counter
+#   status      - Last command exit status icon
+#   time        - Current time
+#   newline     - Line break (for multi-line prompts)
+
+PROMPTOR_LAYOUT="user host path git_status newline status"
+
+# Right prompt layout (for terminals that support it)
+# PROMPTOR_RPROMPT_LAYOUT="time"
+
+# =============================================================================
+# DISPLAY SETTINGS
+# =============================================================================
+
+# Use powerline glyphs (requires a patched font)
+# Set to 0 for ASCII fallback
+PROMPTOR_USE_POWERLINE=1
+
+# Path display style:
+#   full     - Show complete path (/home/user/projects/myapp)
+#   short    - Shorten intermediate dirs (~/p/myapp)
+#   basename - Show only current directory (myapp)
+PROMPTOR_PATH_STYLE="short"
+
+# Maximum directory depth for 'short' path style
+PROMPTOR_PATH_MAX_DEPTH=3
+
+# Always show user@host even when not in SSH
+PROMPTOR_SHOW_USER_HOST_ALWAYS=0
+
+# =============================================================================
+# GIT SETTINGS
+# =============================================================================
+
+# Enable async git status updates (recommended for large repos)
+PROMPTOR_ASYNC_ENABLED=1
+
+# Async timeout in seconds
+PROMPTOR_ASYNC_TIMEOUT=5
+
+# Show stash count
+PROMPTOR_GIT_SHOW_STASH=1
+
+# Show upstream ahead/behind indicators
+PROMPTOR_GIT_SHOW_UPSTREAM=1
+
+# Show numeric counts for status items
+PROMPTOR_GIT_SHOW_COUNTS=1
+
+# =============================================================================
+# SEGMENT COLORS
+# =============================================================================
+# Format: "background_color foreground_color"
+# Colors can be:
+#   - Numbers (0-255 for 256-color palette)
+#   - Names (black, red, green, yellow, blue, magenta, cyan, white)
+#   - Extended names (orange, purple, teal, gray, etc.)
+#
+# Uncomment and modify to customize:
+
+# User segment
+# PROMPTOR_SEGMENT_COLORS[user]="27 255"
+
+# Host segment
+# PROMPTOR_SEGMENT_COLORS[host]="33 255"
+
+# SSH connection indicator
+# PROMPTOR_SEGMENT_COLORS[ssh]="166 255"
+
+# Path segment
+# PROMPTOR_SEGMENT_COLORS[path]="237 250"
+
+# Read-only path
+# PROMPTOR_SEGMENT_COLORS[path_readonly]="124 255"
+
+# Git clean status
+# PROMPTOR_SEGMENT_COLORS[git_clean]="70 232"
+
+# Git dirty (modified) status
+# PROMPTOR_SEGMENT_COLORS[git_dirty]="208 232"
+
+# Git staged changes
+# PROMPTOR_SEGMENT_COLORS[git_staged]="226 232"
+
+# Git conflicts
+# PROMPTOR_SEGMENT_COLORS[git_conflict]="160 255"
+
+# Git detached HEAD
+# PROMPTOR_SEGMENT_COLORS[git_detached]="125 255"
+
+# Python virtualenv
+# PROMPTOR_SEGMENT_COLORS[virtualenv]="35 255"
+
+# Node.js environment
+# PROMPTOR_SEGMENT_COLORS[node_env]="34 232"
+
+# Background jobs
+# PROMPTOR_SEGMENT_COLORS[jobs]="240 255"
+
+# Success status
+# PROMPTOR_SEGMENT_COLORS[status_ok]="236 70"
+
+# Error status
+# PROMPTOR_SEGMENT_COLORS[status_error]="236 160"
+
+# Time segment
+# PROMPTOR_SEGMENT_COLORS[time]="238 250"
+
+# Root user
+# PROMPTOR_SEGMENT_COLORS[root]="160 255"
+
+# =============================================================================
+# CUSTOM CHARACTERS
+# =============================================================================
+# Override default powerline characters
+# Uncomment and modify to customize:
+
+# PROMPTOR_CHARS[hard_divider]=$'\uE0B0'
+# PROMPTOR_CHARS[soft_divider]=$'\uE0B1'
+# PROMPTOR_CHARS[branch]=$'\uE0A0'
+# PROMPTOR_CHARS[ahead]=$'\u2191'
+# PROMPTOR_CHARS[behind]=$'\u2193'
+
+# =============================================================================
+# CUSTOM SEGMENTS
+# =============================================================================
+# Define custom segment functions:
+#
+# promptor::segment_custom_name() {
+#     local content="Custom content"
+#     promptor::segment "bg_color" "fg_color" "$content"
+# }
+#
+# Then add 'custom_name' to PROMPTOR_LAYOUT
+
+# =============================================================================
+# THEME PRESETS
+# =============================================================================
+# Uncomment one of these to use a preset theme:
+
+# --- Minimal Theme ---
+# PROMPTOR_LAYOUT="path git_status status"
+# PROMPTOR_PATH_STYLE="basename"
+
+# --- Full Theme ---
+# PROMPTOR_LAYOUT="user host virtualenv path git_status jobs newline time status"
+
+# --- Solarized Theme ---
+# PROMPTOR_SEGMENT_COLORS[user]="sol_base02 sol_blue"
+# PROMPTOR_SEGMENT_COLORS[path]="sol_base02 sol_base1"
+# PROMPTOR_SEGMENT_COLORS[git_clean]="sol_green sol_base03"
+# PROMPTOR_SEGMENT_COLORS[git_dirty]="sol_orange sol_base03"
