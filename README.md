@@ -122,11 +122,26 @@ The git segment background color is determined by the first matching state in `g
 
 ## Async Git Status
 
-The `git_async` segment runs git status computation in a **background process**. The result is cached and displayed on the next prompt render. This means:
+The `git_async` segment runs git status computation in a **background process** and **automatically refreshes** the prompt when the result is ready:
 
-- First prompt in a new directory shows the **previous cached result** (or nothing)
-- Subsequent prompts show the **up-to-date git status**
+1. A background worker computes the full git status and writes it to a cache file
+2. While the worker is running, the prompt shows the previous result with a **wait indicator** (⏳ hourglass)
+3. When the worker finishes, it sends a `SIGUSR1` signal to the parent shell
+4. The signal handler **rebuilds PS1 and redraws the prompt in-place** — no need to press Enter
+
+This means:
 - The prompt **never blocks** waiting for git
+- Git status **updates automatically** as soon as computation finishes
+- A **wait indicator** shows when a refresh is in progress
+- First prompt in a new directory shows the wait indicator, then auto-refreshes with git info
+
+### Wait Indicator Configuration
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `git.async.wait.bg` | `238` | Background color of the wait segment |
+| `git.async.wait.fg` | `231` | Foreground color of the wait segment |
+| `git.async.wait.character` | `⏳` (`\uf250`) | Character shown while computing |
 
 For synchronous behavior, use `git` instead of `git_async` in your `prompt` config.
 
