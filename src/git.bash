@@ -41,9 +41,12 @@ __bash_promptor_git_async_launch() {
         wait "$__BASH_PROMPTOR_GIT_ASYNC_PID" 2>/dev/null
     fi
 
-    # Launch background worker
+    # Launch background worker; sends SIGUSR1 to parent shell when done
+    local parent_pid=$$
     (
         __bash_promptor_git_compute_status
+        # Signal the parent shell to refresh the prompt with updated git status
+        kill -USR1 "$parent_pid" 2>/dev/null
     ) &
     __BASH_PROMPTOR_GIT_ASYNC_PID=$!
     __BASH_PROMPTOR_GIT_ASYNC_PWD="$PWD"
@@ -58,6 +61,12 @@ __bash_promptor_segment_git_async() {
     fi
 
     local result=""
+    local worker_running=false
+
+    # Check if the previous worker is still running
+    if [[ -n "$__BASH_PROMPTOR_GIT_ASYNC_PID" ]] && kill -0 "$__BASH_PROMPTOR_GIT_ASYNC_PID" 2>/dev/null; then
+        worker_running=true
+    fi
 
     # Check if background worker has finished (file exists and is from current dir)
     if [[ -f "$__BASH_PROMPTOR_GIT_ASYNC_FILE" ]]; then
@@ -71,9 +80,22 @@ __bash_promptor_segment_git_async() {
     # Launch a new async worker for the next prompt
     __bash_promptor_git_async_launch
 
-    # If we have a cached result, show it
+    # If we have a cached result, show it (with wait indicator if worker is still running)
     if [[ -n "$result" ]]; then
-        echo "$result"
+        if [[ "$worker_running" == true ]]; then
+            # Append wait character to show the result is stale/refreshing
+            local wait_char="${bash_promptor_config[git.async.wait.character]}"
+            echo "$result ${wait_char}"
+        else
+            echo "$result"
+        fi
+    elif [[ "$worker_running" == true ]] || [[ "$__BASH_PROMPTOR_GIT_ASYNC_PWD" == "$PWD" ]]; then
+        # No cached result yet but we're in a git repo (worker was just launched)
+        # Show wait indicator
+        local wait_bg="${bash_promptor_config[git.async.wait.bg]}"
+        local wait_fg="${bash_promptor_config[git.async.wait.fg]}"
+        local wait_char="${bash_promptor_config[git.async.wait.character]}"
+        echo "$wait_bg $wait_fg $wait_char"
     fi
 }
 
