@@ -77,8 +77,11 @@ __bash_promptor_segment_git_async() {
         fi
     fi
 
-    # Launch a new async worker for the next prompt
-    __bash_promptor_git_async_launch
+    # Launch a new async worker for the next prompt (skip during SIGUSR1 refresh
+    # to avoid an infinite loop: worker→SIGUSR1→build_prompt→launch→worker→…)
+    if [[ "$__BASH_PROMPTOR_GIT_ASYNC_REFRESHING" != true ]]; then
+        __bash_promptor_git_async_launch
+    fi
 
     # If we have a cached result, show it (with wait indicator if worker is still running)
     if [[ -n "$result" ]]; then

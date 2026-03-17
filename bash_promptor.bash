@@ -42,14 +42,21 @@ __bash_promptor_git_async_init
 # --- Async prompt refresh via SIGUSR1 ---
 # When the background git worker finishes, it sends SIGUSR1 to this shell.
 # The trap handler rebuilds PS1 and forces readline to redraw the prompt.
+
+# Bind the DSR response sequence to redraw once at init time.
+# Setting it inside the signal handler is unreliable and can leak ^[[0n.
+bind '"\e[0n": redraw-current-line' 2>/dev/null
+
+__BASH_PROMPTOR_GIT_ASYNC_REFRESHING=""
+
 __bash_promptor_async_refresh() {
-    # Rebuild prompt with updated async git cache
+    # Guard flag prevents __bash_promptor_segment_git_async from launching
+    # a new worker during this rebuild (which would cause an infinite loop).
+    __BASH_PROMPTOR_GIT_ASYNC_REFRESHING=true
     __bash_promptor_build_prompt
-    # Force readline to redraw the current line with the new PS1.
-    # Technique: bind a key sequence to "redraw-current-line", then inject
-    # a Device Status Report (DSR) query (\e[5n) which the terminal answers
-    # with \e[0n, triggering the bound redraw action.
-    bind '"\e[0n": redraw-current-line' 2>/dev/null
+    __BASH_PROMPTOR_GIT_ASYNC_REFRESHING=""
+    # Inject a DSR query; the terminal responds with \e[0n which triggers
+    # the readline redraw-current-line binding set up above.
     printf '\e[5n' >/dev/tty 2>/dev/null
 }
 trap '__bash_promptor_async_refresh' SIGUSR1
